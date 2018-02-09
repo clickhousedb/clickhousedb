@@ -386,7 +386,23 @@ bool StorageMergeTree::merge(
     {
         new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr),
                                                     merging_tagger->reserved_space.get(), deduplicate);
-        merger.renameMergedTemporaryPart(new_part, future_part.parts, nullptr);
+
+        auto replaced_parts_checker = [&](const MergeTreeData::DataPartsVector & replaced_parts)
+        {
+            if (replaced_parts.size() != future_part.parts.size())
+                throw Exception(
+                    "Unexpected number of parts removed when adding " + future_part.name + ": " + toString(replaced_parts.size())
+                    + " instead of " + toString(future_part.parts.size()));
+            else
+            {
+                for (size_t i = 0; i < future_part.parts.size(); ++i)
+                    if (future_part.parts[i]->name != replaced_parts[i]->name)
+                        throw Exception("Unexpected part removed when adding " + future_part.name + ": " + replaced_parts[i]->name
+                            + " instead of " + future_part.parts[i]->name, ErrorCodes::LOGICAL_ERROR);
+            }
+        };
+
+        data.renameTempPartAndReplace(new_part, nullptr, replaced_parts_checker);
 
         write_part_log({});
     }

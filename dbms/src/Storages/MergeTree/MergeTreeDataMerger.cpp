@@ -807,56 +807,55 @@ MergeTreeDataMerger::MergeAlgorithm MergeTreeDataMerger::chooseMergeAlgorithm(
 }
 
 
-MergeTreeData::DataPartPtr MergeTreeDataMerger::renameMergedTemporaryPart(
-    MergeTreeData::MutableDataPartPtr & new_data_part,
-    const MergeTreeData::DataPartsVector & parts,
-    MergeTreeData::Transaction * out_transaction)
-{
-    /// Rename new part, add to the set and remove original parts.
-    auto replaced_parts = data.renameTempPartAndReplace(new_data_part, nullptr, out_transaction);
+// MergeTreeData::DataPartPtr MergeTreeDataMerger::renameMergedTemporaryPart(
+//     MergeTreeData::MutableDataPartPtr & new_data_part,
+//     const MergeTreeData::DataPartsVector & parts)
+// {
+//     /// Rename new part, add to the set and remove original parts.
+//     auto replaced_parts = data.renameTempPartAndReplace(new_data_part, nullptr);
 
-    /// Let's check that all original parts have been deleted and only them.
-    if (replaced_parts.size() != parts.size())
-    {
-        /** This is normal, although this happens rarely.
-         *
-         * The situation - was replaced 0 parts instead of N can be, for example, in the following case
-         * - we had A part, but there was no B and C parts;
-         * - A, B -> AB was in the queue, but it has not been done, because there is no B part;
-         * - AB, C -> ABC was in the queue, but it has not been done, because there are no AB and C parts;
-         * - we have completed the task of downloading a B part;
-         * - we started to make A, B -> AB merge, since all parts appeared;
-         * - we decided to download ABC part from another replica, since it was impossible to make merge AB, C -> ABC;
-         * - ABC part appeared. When it was added, old A, B, C parts were deleted;
-         * - AB merge finished. AB part was added. But this is an obsolete part. The log will contain the message `Obsolete part added`,
-         *   then we get here.
-         *
-         * When M > N parts could be replaced?
-         * - new block was added in ReplicatedMergeTreeBlockOutputStream;
-         * - it was added to working dataset in memory and renamed on filesystem;
-         * - but ZooKeeper transaction that add its to reference dataset in ZK and unlocks AbandonableLock is failed;
-         * - and it is failed due to connection loss, so we don't rollback working dataset in memory,
-         *   because we don't know if the part was added to ZK or not
-         *   (see ReplicatedMergeTreeBlockOutputStream)
-         * - then method selectPartsToMerge selects a range and see, that AbandonableLock for this part is abandoned,
-         *   and so, it is possible to merge a range skipping this part.
-         *   (NOTE: Merging with part that is not in ZK is not possible, see checks in 'createLogEntryToMergeParts'.)
-         * - and after merge, this part will be removed in addition to parts that was merged.
-         */
-        LOG_WARNING(log, "Unexpected number of parts removed when adding " << new_data_part->name << ": " << replaced_parts.size()
-            << " instead of " << parts.size());
-    }
-    else
-    {
-        for (size_t i = 0; i < parts.size(); ++i)
-            if (parts[i]->name != replaced_parts[i]->name)
-                throw Exception("Unexpected part removed when adding " + new_data_part->name + ": " + replaced_parts[i]->name
-                    + " instead of " + parts[i]->name, ErrorCodes::LOGICAL_ERROR);
-    }
+//     /// Let's check that all original parts have been deleted and only them.
+//     if (replaced_parts.size() != parts.size())
+//     {
+//         /** This is normal, although this happens rarely.
+//          *
+//          * The situation - was replaced 0 parts instead of N can be, for example, in the following case
+//          * - we had A part, but there was no B and C parts;
+//          * - A, B -> AB was in the queue, but it has not been done, because there is no B part;
+//          * - AB, C -> ABC was in the queue, but it has not been done, because there are no AB and C parts;
+//          * - we have completed the task of downloading a B part;
+//          * - we started to make A, B -> AB merge, since all parts appeared;
+//          * - we decided to download ABC part from another replica, since it was impossible to make merge AB, C -> ABC;
+//          * - ABC part appeared. When it was added, old A, B, C parts were deleted;
+//          * - AB merge finished. AB part was added. But this is an obsolete part. The log will contain the message `Obsolete part added`,
+//          *   then we get here.
+//          *
+//          * When M > N parts could be replaced?
+//          * - new block was added in ReplicatedMergeTreeBlockOutputStream;
+//          * - it was added to working dataset in memory and renamed on filesystem;
+//          * - but ZooKeeper transaction that add its to reference dataset in ZK and unlocks AbandonableLock is failed;
+//          * - and it is failed due to connection loss, so we don't rollback working dataset in memory,
+//          *   because we don't know if the part was added to ZK or not
+//          *   (see ReplicatedMergeTreeBlockOutputStream)
+//          * - then method selectPartsToMerge selects a range and see, that AbandonableLock for this part is abandoned,
+//          *   and so, it is possible to merge a range skipping this part.
+//          *   (NOTE: Merging with part that is not in ZK is not possible, see checks in 'createLogEntryToMergeParts'.)
+//          * - and after merge, this part will be removed in addition to parts that was merged.
+//          */
+//         LOG_WARNING(log, "Unexpected number of parts removed when adding " << new_data_part->name << ": " << replaced_parts.size()
+//             << " instead of " << parts.size());
+//     }
+//     else
+//     {
+//         for (size_t i = 0; i < parts.size(); ++i)
+//             if (parts[i]->name != replaced_parts[i]->name)
+//                 throw Exception("Unexpected part removed when adding " + new_data_part->name + ": " + replaced_parts[i]->name
+//                     + " instead of " + parts[i]->name, ErrorCodes::LOGICAL_ERROR);
+//     }
 
-    LOG_TRACE(log, "Merged " << parts.size() << " parts: from " << parts.front()->name << " to " << parts.back()->name);
-    return new_data_part;
-}
+//     LOG_TRACE(log, "Merged " << parts.size() << " parts: from " << parts.front()->name << " to " << parts.back()->name);
+//     return new_data_part;
+// }
 
 
 size_t MergeTreeDataMerger::estimateDiskSpaceForMerge(const MergeTreeData::DataPartsVector & parts)

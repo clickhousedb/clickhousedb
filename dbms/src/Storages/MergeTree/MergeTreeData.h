@@ -145,20 +145,29 @@ public:
     using DataParts = std::set<DataPartPtr, LessDataPart>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    /// Some operations on the set of parts return a Transaction object.
+    using ReplacedPartsChecker = std::function<void(DataPartsVector)>;
+
+    /// Auxiliary object to add a part into the working set in two steps:
+    /// * First, as a PreCommitted part (the part is ready, but not yet in the active set).
+    /// * Next, if commit() is called, the part is added into the active set and the parts that are
+    ///   covered by it are marked Outdated.
     /// If neither commit() nor rollback() was called, the destructor rollbacks the operation.
-    class Transaction : private boost::noncopyable
+    class Transaction
     {
     public:
         Transaction() {}
+        Transaction(const Transaction & other) = delete;
+        Transaction & operator=(const Transaction & other) = delete;
+        Transaction(Transaction && other) = default;
+        Transaction & operator=(Transaction && other) = default;
 
-        void commit();
+        DataPartsVector commit();
 
         void rollback();
 
         bool isEmpty() const
         {
-            return parts_to_add_on_rollback.empty() && parts_to_remove_on_rollback.empty();
+            return !!precommitted_part;
         }
 
         ~Transaction()
@@ -172,23 +181,20 @@ public:
                 tryLogCurrentException("~MergeTreeData::Transaction");
             }
         }
+
     private:
         friend class MergeTreeData;
 
         MergeTreeData * data = nullptr;
-
-        /// What to do on rollback.
-        DataPartsVector parts_to_remove_on_rollback;
-        DataPartsVector parts_to_add_on_rollback;
+        DataPartPtr precommitted_part;
+        ReplacedPartsChecker replaced_parts_checker;
 
         void clear()
         {
             data = nullptr;
-            parts_to_remove_on_rollback.clear();
-            parts_to_add_on_rollback.clear();
+            precommitted_part.reset();
+            replaced_parts_checker = ReplacedPartsChecker();
         }
-
-        void replaceParts(DataPartState move_precommitted_to, DataPartState move_committed_to, bool remove_without_delay);
     };
 
     /// An object that stores the names of temporary files created in the part directory during ALTER of its
@@ -365,20 +371,26 @@ public:
     /// If until is non-null, wake up from the sleep earlier if the event happened.
     void delayInsertIfNeeded(Poco::Event * until = nullptr);
 
-    /// Renames temporary part to a permanent part and adds it to the working set.
-    /// If increment != nullptr, part index is determing using increment. Otherwise part index remains unchanged.
+    /// Renames temporary part to a permanent part and adds it to the active set.
+    /// If increment != nullptr, block number of the part is determing using it.
+    /// Otherwise block numbers of the part remain unchanged.
     /// It is assumed that the part does not intersect with existing parts.
-    /// If out_transaction != nullptr, sets it to an object allowing to rollback part addition (but not the renaming).
-    void renameTempPartAndAdd(MutableDataPartPtr & part, SimpleIncrement * increment = nullptr, Transaction * out_transaction = nullptr);
+    void renameTempPartAndAdd(MutableDataPartPtr & part, SimpleIncrement * increment);
 
-    /// The same as renameTempPartAndAdd but the part can intersect existing parts.
-    /// Deletes and returns all parts covered by the added part (in ascending order).
+    /// The same as renameTempPartAndAdd but the part can cover existing parts.
+    /// Marks all parts covered by the added part Outdated and returns them (in ascending order).
     DataPartsVector renameTempPartAndReplace(
-        MutableDataPartPtr & part, SimpleIncrement * increment = nullptr, Transaction * out_transaction = nullptr);
+        MutableDataPartPtr & part,
+        SimpleIncrement * increment = nullptr,
+        const ReplacedPartsChecker & replaced_parts_checker = ReplacedPartsChecker());
+
+    Transaction renameTempPartToPrecommitted(
+        MutableDataPartPtr & part,
+        ReplacedPartsChecker replaced_parts_checker = ReplacedPartsChecker());
 
     /// Removes parts from the working set parts.
     /// Parts in add must already be in data_parts with PreCommitted, Committed, or Outdated states.
-    /// If clear_without_timeout is true, the parts will be deleted at once, or during the next call to
+    /// If clear_without_timeout is true, the parts will be deleted during the next call to
     /// clearOldParts (ignoring old_parts_lifetime).
     void removePartsFromWorkingSet(const DataPartsVector & remove, bool clear_without_timeout);
 
@@ -661,7 +673,26 @@ private:
     void removePartContributionToColumnSizes(const DataPartPtr & part);
 
     /// If there is no part in the partition with ID `partition_id`, returns empty ptr. Should be called under the lock.
-    DataPartPtr getAnyPartInPartition(const String & partition_id, std::unique_lock<std::mutex> & data_parts_lock);
+    DataPartPtr getAnyPartInPartition(const String & partition_id, std::lock_guard<std::mutex> & data_parts_lock);
+
+    /// Return parts contained in the given part_info or the part that covers it from the Active set.
+    boost::iterator_range<DataPartIteratorByStateAndName> getActivePartsCoveredBy(
+        const MergeTreePartInfo & part_info,
+        DataPartPtr & out_covering_part,
+        std::lock_guard<std::mutex> & data_parts_lock) const;
+
+    /// Add a prepared part and check that it is not obsolete (if it is, return nullptr).
+    DataPartPtr addPreCommittedPart(
+        MutableDataPartPtr & temp_part,
+        SimpleIncrement * increment,
+        const ReplacedPartsChecker & replaced_parts_checker,
+        std::lock_guard<std::mutex> & data_parts_lock);
+
+    /// Adds PreCommitted part to the active set. Returns the vector of replaced parts.
+    DataPartsVector commitPart(
+        const DataPartPtr & precommitted_part,
+        const ReplacedPartsChecker & replaced_parts_checker,
+        std::lock_guard<std::mutex> & data_parts_lock);
 
     /// Checks whether the column is in the primary key.
     bool isPrimaryKeyColumn(const ASTPtr &node) const;

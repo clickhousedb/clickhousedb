@@ -1080,7 +1080,6 @@ void StorageReplicatedMergeTree::tryExecuteMerge(const StorageReplicatedMergeTre
     auto table_lock = lockStructure(false, __PRETTY_FUNCTION__);
 
     MergeList::EntryPtr merge_entry = context.getMergeList().insert(database_name, table_name, entry.new_part_name, parts);
-    MergeTreeData::Transaction transaction;
     size_t aio_threshold = context.getSettings().min_bytes_to_use_direct_io;
 
     MergeTreeDataMerger::FuturePart future_merged_part(parts);
@@ -1182,7 +1181,8 @@ void StorageReplicatedMergeTree::tryExecuteMerge(const StorageReplicatedMergeTre
             throw;
         }
 
-        merger.renameMergedTemporaryPart(part, parts, &transaction);
+        MergeTreeData::Transaction transaction = data.renameTempPartToPrecommitted(part);
+        /// TODO: check against parts.
 
         /// Do not commit if the part is obsolete
         if (!transaction.isEmpty())
@@ -2257,8 +2257,7 @@ bool StorageReplicatedMergeTree::fetchPart(const String & part_name, const Strin
               */
             checkPartAndAddToZooKeeper(part, ops, part_name);
 
-            MergeTreeData::Transaction transaction;
-            replaced_parts = data.renameTempPartAndReplace(part, nullptr, &transaction);
+            MergeTreeData::Transaction transaction = data.renameTempPartToPrecommitted(part);
 
             /// Do not commit if the part is obsolete
             if (!transaction.isEmpty())

@@ -94,6 +94,11 @@ public:
         MergeListEntry & merge_entry,
         size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplication);
 
+    MergeTreeData::DataPartPtr renameMergedTemporaryPart(
+        MergeTreeData::MutableDataPartPtr & new_data_part,
+        const MergeTreeData::DataPartsVector & parts,
+        MergeTreeData::Transaction * out_transaction = nullptr);
+
     /// The approximate amount of disk space needed for merge. With a surplus.
     static size_t estimateDiskSpaceForMerge(const MergeTreeData::DataPartsVector & parts);
 

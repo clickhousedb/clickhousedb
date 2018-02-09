@@ -353,8 +353,8 @@ void ReplicatedMergeTreeBlockOutputStream::commitPart(zkutil::ZooKeeperPtr & zoo
                 quorum_info.host_node_version));
     }
 
-    MergeTreeData::Transaction transaction = storage.data.renameTempPartToPrecommitted(part);
-    /// TODO: check empty
+    MergeTreeData::Transaction transaction; /// If you can not add a part to ZK, we'll remove it back from the working set.
+    storage.data.renameTempPartAndAdd(part, nullptr, &transaction);
 
     zkutil::MultiTransactionInfo info;
     zookeeper->tryMultiUnsafe(ops, info); /// 1 RTT

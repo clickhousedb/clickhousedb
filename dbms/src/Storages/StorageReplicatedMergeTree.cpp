@@ -1187,6 +1187,10 @@ void StorageReplicatedMergeTree::tryExecuteMerge(const StorageReplicatedMergeTre
         /// Do not commit if the part is obsolete
         if (!transaction.isEmpty())
         {
+            static std::atomic<int> tries = 0;
+            if ((tries++) % 3 == 0)
+                throw zkutil::KeeperException("OLOLO 2", ZCONNECTIONLOSS);
+
             getZooKeeper()->multi(ops); /// After long merge, get fresh ZK handle, because previous session may be expired.
             transaction.commit();
         }
@@ -2262,6 +2266,10 @@ bool StorageReplicatedMergeTree::fetchPart(const String & part_name, const Strin
             /// Do not commit if the part is obsolete
             if (!transaction.isEmpty())
             {
+                // static std::atomic<int> tries = 0;
+                // if ((tries++) % 3 == 0)
+                //     throw zkutil::KeeperException("OLOLO 1", ZCONNECTIONLOSS);
+
                 getZooKeeper()->multi(ops);
                 transaction.commit();
             }

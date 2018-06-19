@@ -10,9 +10,11 @@
 #include <Storages/System/StorageSystemEvents.h>
 #include <Storages/System/StorageSystemFunctions.h>
 #include <Storages/System/StorageSystemGraphite.h>
+#include <Storages/System/StorageSystemMacros.h>
 #include <Storages/System/StorageSystemMerges.h>
 #include <Storages/System/StorageSystemMetrics.h>
 #include <Storages/System/StorageSystemModels.h>
+#include <Storages/System/StorageSystemMutations.h>
 #include <Storages/System/StorageSystemNumbers.h>
 #include <Storages/System/StorageSystemOne.h>
 #include <Storages/System/StorageSystemParts.h>
@@ -50,12 +52,14 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     system_database.attachTable("processes", StorageSystemProcesses::create("processes"));
     system_database.attachTable("metrics", StorageSystemMetrics::create("metrics"));
     system_database.attachTable("merges", StorageSystemMerges::create("merges"));
+    system_database.attachTable("mutations", StorageSystemMutations::create("mutations"));
     system_database.attachTable("replicas", StorageSystemReplicas::create("replicas"));
     system_database.attachTable("replication_queue", StorageSystemReplicationQueue::create("replication_queue"));
     system_database.attachTable("dictionaries", StorageSystemDictionaries::create("dictionaries"));
     system_database.attachTable("models", StorageSystemModels::create("models"));
     system_database.attachTable("clusters", StorageSystemClusters::create("clusters"));
     system_database.attachTable("graphite_retentions", StorageSystemGraphite::create("graphite_retentions"));
+    system_database.attachTable("macros", StorageSystemMacros::create("macros"));
 
     if (has_zookeeper)
         system_database.attachTable("zookeeper", StorageSystemZooKeeper::create("zookeeper"));

@@ -1,18 +1,13 @@
-FROM ubuntu:14.04
-
-RUN apt-get update -y
-
-RUN apt-get install -y software-properties-common && \
-	add-apt-repository ppa:ubuntu-toolchain-r/test
+FROM ubuntu:18.04
 
 RUN apt-get update -y && \
-	apt-get install -y git cmake3 libssl-dev libcrypto++-dev \
-		libglib2.0-dev libltdl-dev libicu-dev libmysql++-dev \
-		libreadline-dev libmysqlclient-dev unixodbc-dev \
-		gcc-7 g++-7 unixodbc-dev devscripts dupload fakeroot debhelper
+    env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        cmake ninja-build ccache pkg-config gcc g++ \
+        liblld-6.0-dev libclang-6.0-dev \
+        libssl-dev libicu-dev libreadline-dev libmysqlclient-dev unixodbc-dev \
+        bash expect python python-lxml python-termcolor python-requests curl perl sudo tzdata
 
 ADD build.sh /
 RUN chmod +x /build.sh
-
 
 CMD ["/build.sh"]

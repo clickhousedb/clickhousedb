@@ -1,9 +1,8 @@
 #!/bin/bash
 
-export THREADS=$(grep -c ^processor /proc/cpuinfo)
-export CC=gcc-7
-export CXX=g++-7
-
-mkdir -p /server/build
-cmake /server
-make -j $THREADS
+#ccache -s
+mkdir -p /server/build_docker
+cd /server/build_docker
+cmake -G Ninja /server -DENABLE_TESTS=1
+cmake --build .
+env TEST_OPT="--skip long compile $TEST_OPT" ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
